@@ -1,6 +1,6 @@
 #NoTrayIcon
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_Icon=InstantSupport_Files\icon1.ico
+#AutoIt3Wrapper_Icon=InstantSupport_Files\Head.ico
 #AutoIt3Wrapper_Outfile=InstantViewer.exe
 #AutoIt3Wrapper_Res_Description=Ouvre un VNC sur le canal Instant Support
 #AutoIt3Wrapper_Res_LegalCopyright=BigBod
@@ -18,8 +18,9 @@
 	- Prendre en charge les anciens fichiers ini
 	- si c'était un ancien fichier ini, faire un rebuildini automatiquement
 	- Mise en fonction du check de la connection TCP/IP
-	- Basculer automatiquement en Mode IP si en DNS on a pas eu d'accès à telem.fr au départ
+	- Basculer automatiquement en Mode IP si en DNS on a pas eu d'accès à telem.fr ou inversement, au départ
 	- Basculer automatiquement en Mode IP si en DNS on a pas eu d'accès à telem.fr, et inversement quand on manipule le switch "Bascule mode DNS/mode IP"
+	- Ne se lance qu'une seule fois
 
 A faire :
 	- Mémorisation de la dernière position de la fenêtre Instant Support Viewer
@@ -38,7 +39,14 @@ A faire :
 #include "Aut2Exe\Include\GuiComboBox.au3"
 #include "Aut2Exe\Include\EditConstants.au3"
 #include "Aut2Exe\Include\GuiComboBoxEx.au3"
+#include "Aut2Exe\Include\misc.au3"
 
+
+If _Singleton("BodyInstantViewer", 1) = 0 Then
+    ; MsgBox($MB_SYSTEMMODAL, "Warning", "An occurence of BodyInstantViewer is already running", 1)
+    ; MsgBox(4096, "Warning", "An occurence of BodyInstantViewer is already running", 1)
+    Exit
+EndIf
 
 ; Global vars.
 Global $GUI_ENABLE_DEFBUTTON = 576
@@ -136,6 +144,11 @@ If Number($Listmax) < Number($Listview) Then
 ;	MsgBox(0, "$Listmax < $Listview", "END $Listview : " & $Listview & " $Listmax : " & $Listmax, 10)
 EndIf
 ; MsgBox(0, "after $Listmax < $Listview", "$Listview : " & $Listview & " $Listmax : " & $Listmax)
+$TypeList = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Viewer", "ListType", "")
+If $TypeList = "" Then
+	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Viewer", "ListType", "0")
+	$TypeList = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Viewer", "ListType", "0")
+EndIf
 $LANMode = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Viewer", "LANMode", "")
 If $LANMode = "" Then
 	$OldLANMode = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "InstantViewer", "LANMode", "0")
@@ -169,6 +182,16 @@ If $AutoScale = "" Then
 	EndIf
 	$AutoScale = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "VncViewer", "AutoScale", "0")
 EndIf
+$PosX = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Position", "X", "")
+If $PosX = "" Then
+	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Position", "X", "-1")
+	$PosX = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Position", "X", "-1")
+EndIf
+$PosY = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Position", "Y", "")
+If $PosY = "" Then
+	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Position", "Y", "-1")
+	$PosY = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Position", "Y", "-1")
+EndIf
 
 ; Read messages in ini file.
 ; $Error = 					IniRead( @ScriptDir & "\Bin\instantviewer.ini", "Message", "Error", "ERROR" )
@@ -187,6 +210,7 @@ EndIf
 $Error = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "Error", "")
 $NotCompiled = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "NotCompiled", "")
 $SwitchMode = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "SwitchMode", "")
+$SwitchList = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "SwitchList", "")
 $RebuildIni = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "RebuildIni", "")
 $ClearHistory = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "ClearHistory", "")
 $About = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "About", "")
@@ -210,6 +234,10 @@ EndIf
 If $SwitchMode = "" Then
 	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Message", "SwitchMode", "Bascule mode DNS/mode IP")
 	$SwitchMode = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "SwitchMode", "Bascule mode DNS/mode IP")
+EndIf
+If $SwitchList = "" Then
+	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Message", "SwitchList", "Bascule liste courte/longue")
+	$SwitchList = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Message", "SwitchList", "Bascule liste courte/longue")
 EndIf
 If $RebuildIni = "" Then
 	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Message", "RebuildIni", "Refaire le fichier")
@@ -255,7 +283,7 @@ EndIf
 ; Exit if the script hasn't been compiled
 If NOT @Compiled Then
 	MsgBox(0, $Error, $NotCompiled, 1)
-	Exit
+;	BodyExit()
 EndIf
 
 ; Rebuild Ini if necessary
@@ -275,6 +303,13 @@ $IDListmax = StringTrimRight($IDList, StringLen($IDList) - ($Listmax * 6 + ($Lis
 IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "InstantViewer", "List", $IDListmax)
 $IDList = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "InstantViewer", "List", "")
 $IDListview = StringTrimRight($IDListmax, StringLen($IDListmax) - ($Listview * 6 + ($Listview - 1)))
+$IDListVisu = $IDListview
+
+If $TypeList = 0 Then
+	$IDListVisu = $IDListview
+Else
+	$IDListVisu = $IDListmax
+EndIf
 
 ; If we are in LAN mode use the LAN IP.
 If $LANMode = 1 Then $RepeaterAddress = $RepeaterAddressLAN
@@ -290,7 +325,7 @@ EndIf
 $strRebuildIni = $RebuildIni & " Ini"
 
 ; Create the GUI.
-$Form1 = GUICreate("Instant Support Viewer", 300, 80, -1, -1)
+$Form1 = GUICreate("Instant Support Viewer", 300, 80, $PosX, $PosY)
 GUISetBkColor(16777215)
 $Button1 = GUICtrlCreateButton("Connect", 185, 10, 100, 39)
 GUICtrlSetFont(-1, 12, 800, 0, "MS Sans Serif")
@@ -306,13 +341,14 @@ GUICtrlSetFont($Label1, 8, 400, 0, "MS Sans Serif")
 ; Create right-click context menu for Combo1.
 $ContextMenu1 = GUICtrlCreateContextMenu($Combo1)
 $ContextMenuMode1 = GUICtrlCreateMenuItem($SwitchMode, $ContextMenu1)
+$ContextMenuList1 = GUICtrlCreateMenuItem($SwitchList, $ContextMenu1)
 $ContextMenuRebuild1 = GUICtrlCreateMenuItem($strRebuildIni, $ContextMenu1)
 $ContextMenuHistory1 = GUICtrlCreateMenuItem($ClearHistory, $ContextMenu1)
 $ContextMenuBlank1 = GUICtrlCreateMenuItem("", $ContextMenu1)
 $ContextMenuAbout1 = GUICtrlCreateMenuItem($About, $ContextMenu1)
 
 ; Fill Combo1 and show current repeater address.
-GUICtrlSetData($Combo1, $IDListview)
+GUICtrlSetData($Combo1, $IDListVisu)
 GUISetState(@SW_SHOW, $Form1)
 
 ; Affiche le message file rebuild si OldIni
@@ -354,7 +390,7 @@ While 1
 	$nMsg = GUIGetMsg()
 	Switch $nMsg
 		Case $GUI_EVENT_CLOSE
-			Exit
+			BodyExit()
 		; Switch between LAN and WAN Mode.
 		Case $ContextMenuMode1
 			If $LANMode = 0 Then
@@ -384,8 +420,18 @@ While 1
 ;				MsgBox(0, "$ConnectionEstablished deuxième après Check", "$ConnectionEstablished : " & $ConnectionEstablished)
 			EndIf
 ;			Run(@ScriptFullPath)
-;			Exit
+;			BodyExit()
 		; Rebuild Ini file.
+		Case $ContextMenuList1
+			If $TypeList = 0 Then
+				IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Viewer", "ListType", "1")
+				$IDListVisu = $IDListmax
+			Else
+				IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Viewer", "ListType", "0")
+				$IDListVisu = $IDListview
+			EndIf
+			$TypeList = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Viewer", "ListType", "0")
+			GUICtrlSetData($Combo1, $IDListVisu)
 		Case $ContextMenuRebuild1
 			RebuildConf()
 			GUICtrlSetData($Label1, $FileRebuild)
@@ -430,7 +476,7 @@ While 1
 			; Save IDList in instantviewer.ini
 			$IDListmax = StringTrimRight($IDList, StringLen($IDList) - ($Listmax * 6 + ($Listmax - 1)))
 			IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "InstantViewer", "List", $IDListmax)
-			Exit
+			BodyExit()
 	EndSwitch
 WEnd
 
@@ -479,4 +525,16 @@ Func RebuildConf()
 	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Message", "FileRebuild", $FileRebuild)
 	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Message", "HistoryCleared", $HistoryCleared)
 	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Message", "CustomizedBy", $CustomizedBy)
+EndFunc
+
+Func BodyExit()
+	GUICtrlSetData($Label1, "Sortie en cours")
+	; Mettre à jour la position de la fenêtre dans le fichier instantviewer.ini
+	Local $Pos = WinGetPos("Instant Support Viewer")
+	; MsgBox(0, "'Instant Support Viewer' window stats (x,y,width,height):", $Pos[0] & " " & $Pos[1] & " " & $Pos[2] & " " & $Pos[3])
+	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Position", "X", $Pos[0])
+	IniWrite(@ScriptDir & "\Bin\instantviewer.ini", "Position", "Y", $Pos[1])
+	$PosX = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Position", "X", $Pos[0])
+	$PosY = IniRead(@ScriptDir & "\Bin\instantviewer.ini", "Position", "Y", $Pos[1])
+	Exit
 EndFunc
